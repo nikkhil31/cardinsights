@@ -1,0 +1,116 @@
+# keyword → category (case-insensitive substring match, longer keys win)
+Food & Dining:
+  - swiggy
+  - zomato
+  - dominos
+  - pizza hut
+  - kfc
+  - mcdonalds
+  - burger king
+  - eatclub
+  - box8
+  - restaurant
+  - cafe
+Groceries:
+  - zepto
+  - blinkit
+  - bigbasket
+  - instamart
+  - dunzo
+  - grofers
+  - dmart
+  - jiomart
+Shopping:
+  - amazon
+  - flipkart
+  - myntra
+  - ajio
+  - nykaa
+  - meesho
+Travel:
+  - makemytrip
+  - goibibo
+  - cleartrip
+  - yatra
+  - irctc
+  - uber
+  - ola cabs
+  - rapido
+  - redbus
+  - airbnb
+  - easemytrip
+Fuel:
+  - bpcl
+  - hpcl
+  - iocl
+  - indian oil
+  - petrol
+  - fuel
+Entertainment:
+  - netflix
+  - prime video
+  - hotstar
+  - spotify
+  - bookmyshow
+  - pvr
+  - inox
+Utilities & Bills:
+  - jio
+  - airtel
+  - vodafone
+  - bsnl
+  - tataplay
+  - tata play
+  - electricity
+  - bescom
+  - mahanagar gas
+  - piped gas
+  - broadband
+  - act fibernet
+Health:
+  - apollo
+  - medplus
+  - netmeds
+  - 1mg
+  - pharmeasy
+  - hospital
+  - clinic
+  - diagnostic
+Finance & Fees:
+  - payment received
+  - card cashback
+  - cashback credit
+  - cred
+  - dreamplug
+  - flexipay
+  - emi
+  - interest
+  - late payment
+  - annual fee
+  - finance charge
+Apparel & Fashion:
+  - apparels
+  - clothing
+  - fashion
+  - zara
+  - h&m
+  - westside
+  - lifestyle
+  - pantaloons
+  - trends
+Electronics:
+  - croma
+  - reliance digital
+  - vijay sales
+  - apple
+  - samsung
+  - mi store
+Subscriptions:
+  - google
+  - microsoft
+  - adobe
+  - icloud
+  - openai
+  - chatgpt
+  - github
+  - notion

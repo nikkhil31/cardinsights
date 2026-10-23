@@ -1,0 +1,23 @@
+[project]
+name = "cardwise"
+version = "0.1.0"
+description = "Local-first credit card statement analyzer (SBI first)"
+requires-python = ">=3.10"
+dependencies = [
+    "pdfplumber>=0.11",
+    "sqlalchemy>=2.0",
+    "pandas>=2.0",
+    "plotly>=5.20",
+    "streamlit>=1.32",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
