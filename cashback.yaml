@@ -1,0 +1,57 @@
+# Cashback rates (percent) applied to DEBIT transactions.
+# Rate depends on whether the spend is online or offline.
+# Effective rate = cards[last4][channel] if present else categories[category][channel] else default[channel].
+# Channel is detected from the SBI description: online if it contains an online keyword (below).
+# Edit freely; restart app or click "Recompute cashback" in sidebar to apply.
+default:
+  online: 5.0
+  offline: 1.0
+online_keywords:
+  - online
+  - www
+  - app
+  - ecom
+  - e-commerce
+  - digital
+categories:
+  Food & Dining:
+    online: 5.0
+    offline: 1.0
+  Groceries:
+    online: 5.0
+    offline: 1.0
+  Shopping:
+    online: 5.0
+    offline: 1.0
+  Travel:
+    online: 5.0
+    offline: 1.0
+  Fuel:
+    online: 0.0
+    offline: 0.0
+  Entertainment:
+    online: 5.0
+    offline: 1.0
+  Utilities & Bills:
+    online: 0.0
+    offline: 0.0
+  Health:
+    online: 5.0
+    offline: 1.0
+  Finance & Fees:
+    online: 0.0
+    offline: 0.0
+  Apparel & Fashion:
+    online: 5.0
+    offline: 1.0
+  Electronics:
+    online: 5.0
+    offline: 1.0
+  Subscriptions:
+    online: 5.0
+    offline: 0.0
+  Other:
+    online: 5.0
+    offline: 1.0
+# Per-card overrides (card last4 -> {online, offline}).
+cards: {}
