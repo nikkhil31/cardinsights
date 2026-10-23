@@ -131,10 +131,10 @@ with c3:
 with c4:
     st.subheader("Top merchants")
     top = (
-        debits.groupby("description", as_index=False)["amount"]
-        .agg(["sum", "count"])
+        debits.groupby("description")["amount"]
+        .agg(Total="sum", Txns="count")
         .reset_index()
-        .sort_values("sum", ascending=False)
+        .sort_values("Total", ascending=False)
         .head(10)
     )
     top.columns = ["Merchant", "Total ₹", "Txns"]
