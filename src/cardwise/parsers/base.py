@@ -26,4 +26,10 @@ class ParsedStatement:
     previous_balance: float | None
     purchases_debits: float | None
     payments_credits: float | None
+    # rewards, as reported by the statement itself (no estimation)
+    cashback_earned: float | None = None      # accrued on this statement
+    cashback_ytd: float | None = None         # accrued this calendar year
+    cashback_lifetime: float | None = None    # since card issue
+    offer_cashback: float | None = None       # promotional cashback, this statement
+    petrol_waiver: float | None = None        # fuel surcharge waiver, this statement
     transactions: list[Transaction] = field(default_factory=list)

@@ -71,6 +71,58 @@ def detect(path: str) -> bool:
         return False
 
 
+def _parse_savings_block(text: str) -> dict:
+    """Extract the statement's SAVINGS AND BENEFITS rows.
+
+    Layout:
+        SAVINGS AND BENEFITS SECTION
+        For this statement  For this year  From the card issue date
+        Offer Cashback ( ` )#            0.00   0.00   0.00
+        Petrol Surcharge Waiver( ` )#    0.00   0.00   0.00
+        Card Cashback ( ` )#              435    2502    4815
+    """
+    m = re.search(
+        r"SAVINGS AND BENEFITS SECTION(.*?)(?:Treatment of EMI|Important|$)",
+        text,
+        re.DOTALL | re.IGNORECASE,
+    )
+    block = m.group(1) if m else ""
+
+    num = r"([\d,]+(?:\.\d{1,2})?)"
+
+    def row(label: str) -> list[float] | None:
+        rx = re.compile(
+            rf"{label}[^\n]*?\n?\s*{num}\s+{num}\s+{num}",
+            re.IGNORECASE,
+        )
+        hit = rx.search(block)
+        if not hit:
+            return None
+        return [_money(g) for g in hit.groups()]
+
+    out: dict = {}
+    card_cb = row(r"Card Cashback")
+    if card_cb:
+        out["cashback_earned"], out["cashback_ytd"], out["cashback_lifetime"] = card_cb
+    offer = row(r"Offer Cashback")
+    if offer:
+        out["offer_cashback"] = offer[0]
+    petrol = row(r"Petrol Surcharge Waiver")
+    if petrol:
+        out["petrol_waiver"] = petrol[0]
+    return out
+
+
+def _parse_cashback_summary(text: str) -> float | None:
+    """Fallback: the page-1 'CARD CASHBACK SUMMARY FOR THIS STATEMENT' figure."""
+    m = re.search(r"CARD CASHBACK SUMMARY FOR THIS STATEMENT", text, re.IGNORECASE)
+    if not m:
+        return None
+    tail = text[m.end(): m.end() + 400]
+    hit = re.search(r"^\s*([\d,]+(?:\.\d{1,2})?)\s*$", tail, re.MULTILINE)
+    return _money(hit.group(1)) if hit else None
+
+
 def parse(path: str) -> ParsedStatement:
     text = _full_text(path)
     lines = [ln.strip() for ln in text.splitlines()]
@@ -133,6 +185,16 @@ def parse(path: str) -> ParsedStatement:
         stmt.previous_balance = _money(m.group(1))
         stmt.payments_credits = _money(m.group(2))
         stmt.purchases_debits = _money(m.group(3))
+
+    # Rewards — taken from the statement's own Savings & Benefits table
+    savings = _parse_savings_block(text)
+    stmt.cashback_earned = savings.get("cashback_earned")
+    stmt.cashback_ytd = savings.get("cashback_ytd")
+    stmt.cashback_lifetime = savings.get("cashback_lifetime")
+    stmt.offer_cashback = savings.get("offer_cashback")
+    stmt.petrol_waiver = savings.get("petrol_waiver")
+    if stmt.cashback_earned is None:
+        stmt.cashback_earned = _parse_cashback_summary(text)
 
     # Transactions
     for ln in lines:

@@ -43,6 +43,11 @@ def ingest_pdf(pdf_path: str, session: Session, archive: bool = True) -> dict:
         previous_balance=stmt.previous_balance,
         purchases_debits=stmt.purchases_debits,
         payments_credits=stmt.payments_credits,
+        cashback_earned=stmt.cashback_earned,
+        cashback_ytd=stmt.cashback_ytd,
+        cashback_lifetime=stmt.cashback_lifetime,
+        offer_cashback=stmt.offer_cashback,
+        petrol_waiver=stmt.petrol_waiver,
         file_hash=fh,
     )
     session.add(row)

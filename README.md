@@ -11,6 +11,21 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 ```
 
+## What it answers
+
+The dashboard leads with **spend vs. rewards**, using the figures the statement itself reports — nothing is estimated from merchant keywords:
+
+| Metric | Definition |
+|---|---|
+| Total spend | sum of debit transactions in the current filter |
+| Eligible spend | total spend minus `Fuel` and `Finance & Fees` — the honest denominator for a reward rate, since those never earn |
+| Rewards earned | cashback accrued this cycle, from the statement's Savings & Benefits section |
+| Rewards credited | cashback actually posted to the account (₹ credits whose description mentions cashback) |
+| Return on spend | rewards earned ÷ eligible spend |
+| Net spend | total spend − cashback credited |
+
+Cashback accrues **one cycle before** it is credited, so on any single statement "earned" and "credited" legitimately differ — both are shown rather than netted, so the lag stays visible.
+
 ## Run
 
 ```bash
@@ -41,10 +56,11 @@ Migrating existing SQLite data to Postgres: re-ingest the PDFs (the archive is i
 
 ## How it works
 
-- `parsers/sbi.py` — SBI Card PDF → transactions + summary (reconciles parsed sums against statement totals)
+- `parsers/sbi.py` — SBI Card PDF → transactions + summary + statement-reported cashback (reconciles parsed sums against statement totals)
 - `ingest.py` — SHA-256 dedup, fingerprint per transaction (re-uploads are no-ops)
 - `categorize.py` — keyword rules from `categories.yaml` (edit freely; longest match wins)
-- `dashboard/app.py` — Streamlit UI: upload, KPIs, category pie, monthly trend, per-card, top merchants, filterable table
+- `analysis.py` — spend/reward aggregation; every definition documented in the module docstring
+- `dashboard/app.py` — Streamlit UI: spend vs rewards, per-statement detail, category/month/card splits, top merchants, filterable table
 
 ## Adding a new bank parser
 

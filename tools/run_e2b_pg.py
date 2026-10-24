@@ -54,7 +54,7 @@ echo "SETUP_OK"
         'DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5432/cardwise_test" '
         f"python /home/user/{script_name} /home/user/{pdf_name}"
     )
-    r = sb.commands.run(cmd, timeout=300, user="root")
+    r = sb.commands.run(cmd, timeout=600, user="root")
     print(r.stdout)
     if r.stderr.strip():
         print("STDERR:", r.stderr[-2000:])

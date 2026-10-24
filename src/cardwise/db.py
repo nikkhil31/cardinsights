@@ -6,7 +6,7 @@ import os
 from datetime import date, datetime
 
 from sqlalchemy import (Date, DateTime, Float, ForeignKey, Integer, String,
-                        UniqueConstraint, create_engine)
+                        UniqueConstraint, create_engine, inspect, text)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 DB_PATH = os.environ.get("CARDWISE_DB", os.path.expanduser("~/.cardwise/cardwise.db"))
@@ -31,6 +31,11 @@ class Statement(Base):
     previous_balance: Mapped[float | None] = mapped_column(Float, nullable=True)
     purchases_debits: Mapped[float | None] = mapped_column(Float, nullable=True)
     payments_credits: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cashback_earned: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cashback_ytd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cashback_lifetime: Mapped[float | None] = mapped_column(Float, nullable=True)
+    offer_cashback: Mapped[float | None] = mapped_column(Float, nullable=True)
+    petrol_waiver: Mapped[float | None] = mapped_column(Float, nullable=True)
     file_hash: Mapped[str] = mapped_column(String(64), unique=True)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -57,6 +62,35 @@ class Transaction(Base):
 
 def make_fingerprint(d: date, desc: str, amount: float, txn_type: str) -> str:
     return hashlib.sha256(f"{d.isoformat()}|{desc}|{amount:.2f}|{txn_type}".encode()).hexdigest()
+
+
+# Columns added after the first release. create_all() only creates missing
+# tables, so existing databases need these applied explicitly.
+_ADDITIVE_COLUMNS: dict[str, dict[str, object]] = {
+    "statements": {
+        "cashback_earned": Float(),
+        "cashback_ytd": Float(),
+        "cashback_lifetime": Float(),
+        "offer_cashback": Float(),
+        "petrol_waiver": Float(),
+    },
+}
+
+
+def _migrate(engine) -> None:
+    """Apply additive columns. Types are compiled per dialect (SQLite & Postgres)."""
+    insp = inspect(engine)
+    tables = set(insp.get_table_names())
+    with engine.begin() as conn:
+        for table, cols in _ADDITIVE_COLUMNS.items():
+            if table not in tables:
+                continue
+            existing = {c["name"] for c in insp.get_columns(table)}
+            for name, typ in cols.items():
+                if name in existing:
+                    continue
+                ddl_type = typ.compile(dialect=engine.dialect)
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl_type}"))
 
 
 def _resolve_url(path: str | None = None) -> str:
@@ -86,6 +120,7 @@ def get_engine(path: str | None = None):
         kwargs = {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 10}
     eng = create_engine(url, **kwargs)
     Base.metadata.create_all(eng)
+    _migrate(eng)
     return eng
 
 

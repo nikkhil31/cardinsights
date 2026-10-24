@@ -53,6 +53,34 @@ debits = df[df.txn_type == "debit"]
 check("debit sum matches statement", abs(debits.amount.sum() - 9486.92) < 0.01, f"{debits.amount.sum():.2f}")
 check("categories assigned", (df.category != "").all(), str(df.category.nunique()) + " distinct")
 
+# 4b. rewards figures persisted from the statement
+stmts = pd.read_sql("SELECT * FROM statements", eng)
+check("cashback_earned persisted", float(stmts.cashback_earned.iloc[0]) == 435.0, str(stmts.cashback_earned.iloc[0]))
+check("cashback_ytd persisted", float(stmts.cashback_ytd.iloc[0]) == 2502.0, str(stmts.cashback_ytd.iloc[0]))
+check("cashback_lifetime persisted", float(stmts.cashback_lifetime.iloc[0]) == 4815.0, str(stmts.cashback_lifetime.iloc[0]))
+
+# 4c. aggregation matches the standalone report
+from cardwise.analysis import overview  # noqa: E402
+
+agg = overview(df, stmts)
+check("total spend", abs(agg["total_spend"] - 9486.92) < 0.01, f"{agg['total_spend']:.2f}")
+check("eligible spend excludes fuel+fees", abs(agg["eligible_spend"] - 8816.13) < 0.01, f"{agg['eligible_spend']:.2f}")
+check("rewards earned", abs(agg["rewards_earned"] - 435.0) < 0.01, f"{agg['rewards_earned']:.2f}")
+check("rewards credited", abs(agg["rewards_credited"] - 206.0) < 0.01, f"{agg['rewards_credited']:.2f}")
+check("return pct", agg["return_pct"] == 4.93, f"{agg['return_pct']}%")
+
+# 5. additive migration re-adds statement reward columns on Postgres
+with eng.begin() as c:
+    for col in ("cashback_earned", "cashback_ytd", "cashback_lifetime", "offer_cashback", "petrol_waiver"):
+        c.execute(text(f"ALTER TABLE statements DROP COLUMN IF EXISTS {col}"))
+eng_mig = get_engine()
+scols = {c["name"]: str(c["type"]) for c in sa_inspect(eng_mig).get_columns("statements")}
+check("migration re-added reward columns",
+      {"cashback_earned", "cashback_ytd", "cashback_lifetime", "offer_cashback", "petrol_waiver"} <= set(scols),
+      str(sorted(scols)))
+check("pg numeric type", "DOUBLE PRECISION" in scols.get("cashback_earned", "").upper() or "FLOAT" in scols.get("cashback_earned", "").upper(),
+      scols.get("cashback_earned", ""))
+
 # 5. column types on PG
 cols = {c["name"].lower(): str(c["type"]) for c in sa_inspect(eng).get_columns("transactions")}
 check("expected columns only", set(cols) == {
