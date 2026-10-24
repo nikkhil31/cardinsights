@@ -25,10 +25,9 @@ try:
     # upload package + configs + script + statement
     for p in (root / "src").rglob("*.py"):
         sb.files.write(f"/home/user/{p.relative_to(root)}", p.read_bytes())
-    for name in ("categories.yaml", "cashback.yaml"):
-        f = root / name
-        if f.exists():
-            sb.files.write(f"/home/user/{name}", f.read_bytes())
+    cfg = root / "categories.yaml"
+    if cfg.exists():
+        sb.files.write("/home/user/categories.yaml", cfg.read_bytes())
     sb.files.write(f"/home/user/{os.path.basename(script)}", pathlib.Path(script).read_bytes())
     sb.files.write(f"/home/user/{os.path.basename(local_pdf)}", pathlib.Path(local_pdf).read_bytes())
 

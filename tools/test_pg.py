@@ -43,35 +43,24 @@ check("re-ingest skipped", r2["status"] == "skipped")
 
 # 4. dashboard query path
 df = pd.read_sql(
-    "SELECT t.date, t.description, t.amount, t.txn_type, t.category, t.channel, "
-    "t.cashback, s.card_last4 FROM transactions t JOIN statements s ON s.id = t.statement_id",
+    "SELECT t.date, t.description, t.amount, t.txn_type, t.category, s.card_last4 "
+    "FROM transactions t JOIN statements s ON s.id = t.statement_id",
     eng,
     parse_dates=["date"],
 )
 check("rows via read_sql", len(df) == 16, f"{len(df)} rows")
 debits = df[df.txn_type == "debit"]
 check("debit sum matches statement", abs(debits.amount.sum() - 9486.92) < 0.01, f"{debits.amount.sum():.2f}")
-check("cashback populated", df.cashback.notna().all(), f"total ₹{df.cashback.sum():.2f}")
+check("categories assigned", (df.category != "").all(), str(df.category.nunique()) + " distinct")
 
 # 5. column types on PG
 cols = {c["name"].lower(): str(c["type"]) for c in sa_inspect(eng).get_columns("transactions")}
-check("channel col exists", "channel" in cols, cols.get("channel", ""))
-check("cashback col exists", "cashback" in cols, cols.get("cashback", ""))
+check("expected columns only", set(cols) == {
+    "id", "statement_id", "date", "description", "amount", "txn_type", "category", "fingerprint"
+}, str(sorted(cols)))
+check("date is a date column", "DATE" in cols.get("date", "").upper(), cols.get("date", ""))
 
-# 6. additive migration on a legacy table
-with eng.begin() as c:
-    for col in ("channel", "cashback", "cashback_rate"):
-        c.execute(text(f"ALTER TABLE transactions DROP COLUMN IF EXISTS {col}"))
-eng2 = get_engine()
-cols2 = {c["name"]: str(c["type"]) for c in sa_inspect(eng2).get_columns("transactions")}
-check("migrate re-added cols", {"channel", "cashback", "cashback_rate"} <= set(cols2), str(sorted(cols2)))
-check(
-    "pg numeric type correct",
-    "DOUBLE PRECISION" in cols2.get("cashback", "").upper() or "FLOAT" in cols2.get("cashback", "").upper(),
-    cols2.get("cashback", ""),
-)
-
-# 7. sqlite path still works (regression)
+# 6. sqlite path still works (regression)
 eng_sqlite = get_engine("/tmp/cardwise_regress.db")
 check("sqlite still works", eng_sqlite.url.get_backend_name() == "sqlite", str(eng_sqlite.url))
 

@@ -12,7 +12,6 @@ import streamlit as st
 # Make `cardwise` importable when run as a script
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from cardwise.cashback import channel_for, compute_cashback, rate_for, reload_rates  # noqa: E402
 from cardwise.db import get_engine, get_session  # noqa: E402
 from cardwise.ingest import ingest_pdf  # noqa: E402
 
@@ -29,35 +28,10 @@ def load_transactions() -> pd.DataFrame:
     eng = get_engine()
     q = """
     SELECT t.date, t.description, t.amount, t.txn_type, t.category,
-           t.channel, t.cashback, t.cashback_rate,
            s.bank, s.card_last4
     FROM transactions t JOIN statements s ON s.id = t.statement_id
     """
     df = pd.read_sql(q, eng, parse_dates=["date"])
-    if df.empty:
-        return df
-    if "channel" not in df.columns:
-        df["channel"] = None
-    # backfill channel
-    from cardwise.cashback import channel_for
-    ch_mask = df["channel"].isna() | (df["channel"].astype(str).str.strip() == "")
-    if ch_mask.any():
-        df.loc[ch_mask, "channel"] = df[ch_mask].apply(
-            lambda r: channel_for(r["description"], r["txn_type"]), axis=1
-        )
-    df["channel"] = df["channel"].fillna("offline")
-    if "cashback" not in df.columns:
-        df["cashback"] = None
-    mask = df["cashback"].isna()
-    if mask.any():
-        df.loc[mask, "cashback"] = df[mask].apply(
-            lambda r: compute_cashback(r["description"], r["category"], r["card_last4"],
-                                      r["amount"], r["txn_type"]),
-            axis=1,
-        )
-    df["cashback"] = df["cashback"].fillna(0.0)
-    if "cashback_rate" not in df.columns:
-        df["cashback_rate"] = None
     return df
 
 
@@ -79,36 +53,14 @@ with st.sidebar:
             if res["status"] == "skipped":
                 st.info("Already ingested.")
             else:
-                st.success(f"{res['bank']} ••{res['card_last4']} — {res['inserted']}/{res['transactions']} new txns • est. cashback ₹{res.get('cashback', 0):,.2f}")
+                st.success(f"{res['bank']} ••{res['card_last4']} — {res['inserted']}/{res['transactions']} new txns")
         except Exception as e:
             st.error(f"Parse failed: {e}")
         finally:
             os.unlink(tmp_path)
 
     st.divider()
-    if st.button("Recompute cashback"):
-        from sqlalchemy import select
-        from cardwise.db import Transaction
-        from cardwise.categorize import categorize
-        sess = _session()
-        eng = get_engine()
-        rows = sess.query(Transaction).all()
-        n = 0
-        for t in rows:
-            cat = t.category or categorize(t.description)
-            t.category = cat
-            ch = channel_for(t.description, t.txn_type)
-            t.channel = ch
-            cb = compute_cashback(t.description, cat, t.statement.card_last4 if t.statement else None, t.amount, t.txn_type)
-            t.cashback = cb
-            if t.txn_type == "debit":
-                t.cashback_rate = rate_for(cat, t.statement.card_last4 if t.statement else None, ch == "online")
-            n += 1
-        sess.commit()
-        reload_rates()
-        st.success(f"Recomputed cashback for {n} transactions.")
-        st.rerun()
-    st.caption("DB at `~/.cardwise/cardwise.db`. Edit `categories.yaml` / `cashback.yaml` to tune.")
+    st.caption("DB at `~/.cardwise/cardwise.db`. Edit `categories.yaml` to tune categorization.")
 
 
 # ---------- Main ----------
@@ -122,7 +74,7 @@ if df.empty:
     st.stop()
 
 # Filters
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3 = st.columns(3)
 with col1:
     months = sorted(df["date"].dt.to_period("M").unique(), reverse=True)
     sel_months = st.multiselect("Month", options=[str(m) for m in months], default=[str(m) for m in months[:1]])
@@ -132,15 +84,11 @@ with col2:
 with col3:
     cats = sorted(df["category"].unique())
     sel_cats = st.multiselect("Category", options=cats, default=cats)
-with col4:
-    chans = sorted(df["channel"].fillna("offline").unique())
-    sel_chans = st.multiselect("Channel", options=chans, default=chans)
 
 mask = (
     df["date"].dt.to_period("M").astype(str).isin(sel_months)
     & df["card_last4"].isin(sel_cards)
     & df["category"].isin(sel_cats)
-    & df["channel"].fillna("offline").isin(sel_chans)
 )
 fdf = df[mask]
 
@@ -148,7 +96,7 @@ debits = fdf[fdf["txn_type"] == "debit"]
 credits = fdf[fdf["txn_type"] == "credit"]
 
 # KPIs
-k1, k2, k3, k4, k5, k6 = st.columns(6)
+k1, k2, k3, k4, k5 = st.columns(5)
 k1.metric("Total spend", f"₹{debits['amount'].sum():,.0f}")
 k2.metric("Credits/payments", f"₹{credits['amount'].sum():,.0f}")
 k3.metric("Transactions", len(debits))
@@ -158,13 +106,6 @@ if latest is not None and pd.notna(latest["total_due"]):
 if latest is not None and pd.notna(latest["credit_limit"]) and latest["credit_limit"]:
     util = (latest["total_due"] or 0) / latest["credit_limit"] * 100
     k5.metric("Utilization", f"{util:.1f}%")
-est_cb = debits["cashback"].sum() if "cashback" in debits.columns else 0.0
-k6.metric("Est. cashback", f"₹{est_cb:,.2f}")
-
-# Actual cashback received (credit lines)
-cb_credits = credits[credits["description"].str.contains("cashback", case=False, na=False)] if not credits.empty else credits
-cb_received = cb_credits["amount"].sum() if not cb_credits.empty else 0.0
-st.caption(f"Cashback received (statement credits): ₹{cb_received:,.2f} • Net spend after est. cashback: ₹{debits['amount'].sum() - est_cb:,.2f}")
 
 st.divider()
 
@@ -197,34 +138,9 @@ with c4:
         .head(10)
     )
     top.columns = ["Merchant", "Total ₹", "Txns"]
-    # add estimated cashback per merchant
-    cb_map = debits.groupby("description")["cashback"].sum() if "cashback" in debits.columns else None
-    if cb_map is not None:
-        top["Cashback ₹"] = top["Merchant"].map(cb_map).fillna(0.0).round(2)
     st.dataframe(top, use_container_width=True, hide_index=True)
-
-# Cashback row
-cb1, cb2 = st.columns(2)
-with cb1:
-    st.subheader("Cashback by category (est.)")
-    if not debits.empty and "cashback" in debits.columns:
-        cbc = debits.groupby("category", as_index=False)["cashback"].sum().sort_values("cashback", ascending=False)
-        cbc = cbc[cbc["cashback"] > 0]
-        if not cbc.empty:
-            st.plotly_chart(px.bar(cbc, x="category", y="cashback", text_auto=".2s"), use_container_width=True)
-        else:
-            st.info("No estimated cashback for current filters.")
-with cb2:
-    st.subheader("Cashback by card (est.)")
-    if not debits.empty and "cashback" in debits.columns:
-        cbc2 = debits.groupby("card_last4", as_index=False)["cashback"].sum().sort_values("cashback", ascending=False)
-        cbc2 = cbc2[cbc2["cashback"] > 0]
-        if not cbc2.empty:
-            st.plotly_chart(px.bar(cbc2, x="card_last4", y="cashback", text_auto=".2s"), use_container_width=True)
-        else:
-            st.info("No estimated cashback for current filters.")
 
 # Raw table
 st.subheader("Transactions")
-show = fdf.sort_values("date", ascending=False)[["date", "description", "category", "channel", "amount", "txn_type", "cashback", "card_last4"]]
+show = fdf.sort_values("date", ascending=False)[["date", "description", "category", "amount", "txn_type", "card_last4"]]
 st.dataframe(show, use_container_width=True, hide_index=True)

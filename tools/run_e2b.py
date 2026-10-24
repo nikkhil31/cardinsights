@@ -43,11 +43,10 @@ try:
         for p in tests_dir.rglob("*.py"):
             sb.files.write(f"/home/user/{p.relative_to(root)}", p.read_bytes())
 
-    # yaml configs at repo root, needed by categorize.py / cashback.py
-    for name in ("categories.yaml", "cashback.yaml"):
-        cfg = root / name
-        if cfg.exists():
-            sb.files.write(f"/home/user/{name}", cfg.read_bytes())
+    # yaml configs at repo root, needed by categorize.py
+    cfg = root / "categories.yaml"
+    if cfg.exists():
+        sb.files.write("/home/user/categories.yaml", cfg.read_bytes())
 
     r = sb.commands.run(
         "pip install -q pdfplumber sqlalchemy pyyaml pandas pytest 2>&1 | tail -2",

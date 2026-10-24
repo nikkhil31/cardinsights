@@ -35,7 +35,7 @@ export DATABASE_URL=postgresql+psycopg://cardwise:cardwise@localhost:5432/cardwi
 streamlit run src/cardwise/dashboard/app.py
 ```
 
-URL resolution order: explicit arg > `DATABASE_URL` > `CARDWISE_DB` > `~/.cardwise/cardwise.db`. Both `postgres://` and `postgresql://` schemes are normalised to the psycopg3 driver. Schema is created on first connect; additive columns (`channel`, `cashback`, `cashback_rate`) are added automatically on both dialects — see `_migrate()` in `db.py`.
+URL resolution order: explicit arg > `DATABASE_URL` > `CARDWISE_DB` > `~/.cardwise/cardwise.db`. Both `postgres://` and `postgresql://` schemes are normalised to the psycopg3 driver. The schema is created on first connect by SQLAlchemy's `create_all()`.
 
 Migrating existing SQLite data to Postgres: re-ingest the PDFs (the archive is in `~/.cardwise/statements/`, and dedup makes this safe) — or `pgloader ~/.cardwise/cardwise.db postgresql://...` if you want the rows copied verbatim.
 

@@ -6,7 +6,7 @@ import os
 from datetime import date, datetime
 
 from sqlalchemy import (Date, DateTime, Float, ForeignKey, Integer, String,
-                        UniqueConstraint, create_engine, inspect, text)
+                        UniqueConstraint, create_engine)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 DB_PATH = os.environ.get("CARDWISE_DB", os.path.expanduser("~/.cardwise/cardwise.db"))
@@ -50,9 +50,6 @@ class Transaction(Base):
     amount: Mapped[float] = mapped_column(Float)
     txn_type: Mapped[str] = mapped_column(String(8))  # debit | credit
     category: Mapped[str] = mapped_column(String(64), default="Other")
-    channel: Mapped[str | None] = mapped_column(String(8), nullable=True, default="offline")
-    cashback: Mapped[float | None] = mapped_column(Float, nullable=True, default=0.0)
-    cashback_rate: Mapped[float | None] = mapped_column(Float, nullable=True, default=0.0)
     fingerprint: Mapped[str] = mapped_column(String(64))
 
     statement: Mapped[Statement] = relationship(back_populates="transactions")
@@ -60,35 +57,6 @@ class Transaction(Base):
 
 def make_fingerprint(d: date, desc: str, amount: float, txn_type: str) -> str:
     return hashlib.sha256(f"{d.isoformat()}|{desc}|{amount:.2f}|{txn_type}".encode()).hexdigest()
-
-
-_ADDITIVE_COLUMNS: dict[str, dict[str, object]] = {
-    "transactions": {
-        "channel": String(8),
-        "cashback": Float(),
-        "cashback_rate": Float(),
-    },
-}
-
-
-def _migrate(engine) -> None:
-    """Lightweight additive migration (create_all won't alter existing tables).
-
-    Types are compiled for the active dialect so this works on SQLite and Postgres.
-    """
-    insp = inspect(engine)
-    tables = set(insp.get_table_names())
-    for table, cols in _ADDITIVE_COLUMNS.items():
-        if table not in tables:
-            continue
-        existing = {c["name"] for c in insp.get_columns(table)}
-        missing = [(n, t) for n, t in cols.items() if n not in existing]
-        if not missing:
-            continue
-        with engine.begin() as conn:
-            for name, typ in missing:
-                ddl_type = typ.compile(dialect=engine.dialect)
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl_type}"))
 
 
 def _resolve_url(path: str | None = None) -> str:
@@ -118,7 +86,6 @@ def get_engine(path: str | None = None):
         kwargs = {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 10}
     eng = create_engine(url, **kwargs)
     Base.metadata.create_all(eng)
-    _migrate(eng)
     return eng
 
 

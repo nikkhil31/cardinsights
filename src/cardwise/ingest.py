@@ -9,7 +9,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .categorize import categorize
-from .cashback import channel_for, compute_cashback
 from .db import Statement, Transaction, make_fingerprint
 from .parsers import parse_pdf
 
@@ -54,13 +53,6 @@ def ingest_pdf(pdf_path: str, session: Session, archive: bool = True) -> dict:
         fp = make_fingerprint(t.date, t.description, t.amount, t.txn_type)
         if session.scalar(select(Transaction).where(Transaction.fingerprint == fp)):
             continue
-        cat = categorize(t.description)
-        ch = channel_for(t.description, t.txn_type)
-        cb = compute_cashback(t.description, cat, stmt.card_last4, t.amount, t.txn_type)
-        rate = 0.0
-        if t.txn_type == "debit":
-            from .cashback import rate_for
-            rate = rate_for(cat, stmt.card_last4, ch == "online")
         session.add(
             Transaction(
                 statement_id=row.id,
@@ -68,10 +60,7 @@ def ingest_pdf(pdf_path: str, session: Session, archive: bool = True) -> dict:
                 description=t.description,
                 amount=t.amount,
                 txn_type=t.txn_type,
-                category=cat,
-                channel=ch,
-                cashback=cb,
-                cashback_rate=rate,
+                category=categorize(t.description),
                 fingerprint=fp,
             )
         )
@@ -91,8 +80,4 @@ def ingest_pdf(pdf_path: str, session: Session, archive: bool = True) -> dict:
         "transactions": len(stmt.transactions),
         "inserted": inserted,
         "total_due": stmt.total_due,
-        "cashback": sum(
-            compute_cashback(t.description, categorize(t.description), stmt.card_last4, t.amount, t.txn_type)
-            for t in stmt.transactions
-        ),
     }
