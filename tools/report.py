@@ -1,9 +1,16 @@
-"""Print the spend-vs-rewards report from an ingested statement (dev/QA helper)."""
+"""Print the spend-vs-rewards report from an ingested statement (dev/QA helper).
+
+Works both locally (repo checkout) and inside the E2B sandbox.
+"""
 import os
 import sys
 import tempfile
 
-sys.path.insert(0, "/home/user/src")
+_here = os.path.dirname(os.path.abspath(__file__))
+for _cand in (os.path.join(_here, "..", "src"), "/home/user/src"):
+    if os.path.isdir(_cand):
+        sys.path.insert(0, os.path.abspath(_cand))
+        break
 
 tmp = tempfile.mkdtemp(prefix="cardwise_rep_")
 os.environ["CARDWISE_DB"] = os.path.join(tmp, "r.db")
