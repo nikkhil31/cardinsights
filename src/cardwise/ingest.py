@@ -12,7 +12,8 @@ from .categorize import categorize
 from .db import Statement, Transaction, make_fingerprint
 from .parsers import parse_pdf
 
-DATA_DIR = os.environ.get("CARDWISE_DATA", os.path.expanduser("~/.cardwise/statements"))
+def _data_dir() -> str:
+    return os.environ.get("CARDWISE_DATA", os.path.expanduser("~/.cardwise/statements"))
 
 
 def file_sha256(path: str) -> str:
@@ -74,8 +75,11 @@ def ingest_pdf(pdf_path: str, session: Session, archive: bool = True) -> dict:
     session.commit()
 
     if archive:
-        os.makedirs(DATA_DIR, exist_ok=True)
-        shutil.copy2(pdf_path, os.path.join(DATA_DIR, os.path.basename(pdf_path)))
+        dd = _data_dir()
+        os.makedirs(dd, exist_ok=True)
+        dst = os.path.join(dd, os.path.basename(pdf_path))
+        if os.path.abspath(dst) != os.path.abspath(pdf_path):
+            shutil.copy2(pdf_path, dst)
 
     return {
         "status": "ok",
