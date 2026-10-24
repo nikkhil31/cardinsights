@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cardwise-db
+    environment:
+      POSTGRES_USER: cardwise
+      POSTGRES_PASSWORD: cardwise
+      POSTGRES_DB: cardwise
+    ports:
+      - "5432:5432"
+    volumes:
+      - cardwise_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cardwise -d cardwise"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  cardwise_pg:

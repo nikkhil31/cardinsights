@@ -1,4 +1,4 @@
-"""SQLite storage layer via SQLAlchemy."""
+"""Storage layer via SQLAlchemy — SQLite by default, Postgres via DATABASE_URL."""
 from __future__ import annotations
 
 import hashlib
@@ -10,6 +10,7 @@ from sqlalchemy import (Date, DateTime, Float, ForeignKey, Integer, String,
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 DB_PATH = os.environ.get("CARDWISE_DB", os.path.expanduser("~/.cardwise/cardwise.db"))
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 
 
 class Base(DeclarativeBase):
@@ -61,25 +62,61 @@ def make_fingerprint(d: date, desc: str, amount: float, txn_type: str) -> str:
     return hashlib.sha256(f"{d.isoformat()}|{desc}|{amount:.2f}|{txn_type}".encode()).hexdigest()
 
 
+_ADDITIVE_COLUMNS: dict[str, dict[str, object]] = {
+    "transactions": {
+        "channel": String(8),
+        "cashback": Float(),
+        "cashback_rate": Float(),
+    },
+}
+
+
 def _migrate(engine) -> None:
-    """Lightweight additive migration for SQLite (create_all won't alter tables)."""
-    with engine.begin() as conn:
-        insp = inspect(engine)
-        if "transactions" in insp.get_table_names():
-            existing = {c["name"] for c in insp.get_columns("transactions")}
-            for name, decl in (("channel", "TEXT"), ("cashback", "REAL"), ("cashback_rate", "REAL")):
-                if name not in existing:
-                    conn.execute(text(f"ALTER TABLE transactions ADD COLUMN {name} {decl}"))
-        if "statements" in insp.get_table_names():
-            existing = {c["name"] for c in insp.get_columns("statements")}
-            # placeholder for future additive columns
-            _ = existing
+    """Lightweight additive migration (create_all won't alter existing tables).
+
+    Types are compiled for the active dialect so this works on SQLite and Postgres.
+    """
+    insp = inspect(engine)
+    tables = set(insp.get_table_names())
+    for table, cols in _ADDITIVE_COLUMNS.items():
+        if table not in tables:
+            continue
+        existing = {c["name"] for c in insp.get_columns(table)}
+        missing = [(n, t) for n, t in cols.items() if n not in existing]
+        if not missing:
+            continue
+        with engine.begin() as conn:
+            for name, typ in missing:
+                ddl_type = typ.compile(dialect=engine.dialect)
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl_type}"))
+
+
+def _resolve_url(path: str | None = None) -> str:
+    """Pick the DB URL: explicit path/URL > DATABASE_URL > local SQLite file."""
+    if path and "://" in path:
+        return path
+    if path:
+        return f"sqlite:///{path}"
+    if DATABASE_URL:
+        # normalise Heroku/Render-style schemes to the psycopg3 driver
+        for prefix in ("postgres://", "postgresql://"):
+            if DATABASE_URL.startswith(prefix):
+                return "postgresql+psycopg://" + DATABASE_URL[len(prefix):]
+        return DATABASE_URL
+    return f"sqlite:///{DB_PATH}"
 
 
 def get_engine(path: str | None = None):
-    p = path or DB_PATH
-    os.makedirs(os.path.dirname(p), exist_ok=True)
-    eng = create_engine(f"sqlite:///{p}")
+    url = _resolve_url(path)
+    kwargs: dict = {}
+    if url.startswith("sqlite"):
+        fs_path = url.replace("sqlite:///", "", 1)
+        parent = os.path.dirname(fs_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+    else:
+        kwargs = {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 10}
+    eng = create_engine(url, **kwargs)
     Base.metadata.create_all(eng)
     _migrate(eng)
     return eng
