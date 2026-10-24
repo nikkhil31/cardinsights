@@ -58,6 +58,10 @@ pip install -e ".[dev]"
 pytest tests/ --pdf=/path/to/real_statement.pdf
 ```
 
+The suite **asserts reconciliation**: parsed debit and credit sums must equal the statement's own "Purchases & Other Debits" and "Payments & Credits" totals. If a bank changes the PDF layout, this fails loudly instead of quietly storing partial data. Verified by mutation test (`tools/verify_guard.py` drops a transaction and confirms the suite fails).
+
+PDFs and `.env` files are gitignored — never commit statements.
+
 ## Roadmap
 
 - [ ] HDFC / ICICI / Axis / Amex parsers

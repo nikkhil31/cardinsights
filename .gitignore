@@ -1,11 +1,21 @@
 __pycache__/
 *.pyc
 .venv/
+venv/
 data/
 *.db
+*.sqlite
 .DS_Store
 tools/__pycache__/
 .pytest_cache/
 *.egg-info/
 build/
 dist/
+
+# never commit secrets or statements
+.env
+.env.*
+!.env.example
+*.pdf
+*.PDF
+.streamlit/secrets.toml
